@@ -1,0 +1,12 @@
+name = "ExponentialSmoothing"
+uuid = "9829fbd5-7904-5e4b-bcaa-ed0980304b8b"
+authors = ["Giuseppe Ragusa <giuseppe.ragusa@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
