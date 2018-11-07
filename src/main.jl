@@ -1,20 +1,18 @@
-using Optim
-using Statistics
-using StatsFuns
-using TimeSeries
-using RecipesBase
-using Colors
 """
 Transform x::Real to be in a [0.1] interval.
 """
 @inline transform_unit_interval(x::Real) = 1.0 / (exp(-x) + 1.0)
 @inline transform_from_unit_interval(x::Real) = logit(x)
-
-
-invlogit(x::Real) = 1.0 / (exp(-x) + 1.0)
-
+@inline invlogit(x::Real) = 1.0 / (exp(-x) + 1.0)
 @inline transform_unit_interval(x::Real, a::Real, b::Real) = (b - a) * invlogit(x) + a
 @inline transform_from_unit_interval(x::Real, a::Real, b::Real) = logit((x - a) / (b - a))
+
+const LOWER_ALPHA = 1e-04
+const UPPER_ALPHA = 1 - 1e-04
+
+const LOWER_BETA = 1e-04
+const UPPER_BETA = 1 - 1e-04
+
 
 abstract type AbstractExponentitalSmoothing end
 
@@ -189,8 +187,8 @@ objective(m::Holt) = begin
     (y, θ) -> begin
         ## θ = [α, β, ℓ₀, s₀]
         ly = length(y)
-        a  = transform_unit_interval(θ[1], 1e-04, 0.99)
-        b  = transform_unit_interval(θ[2], 1e-04, 0.99)
+        a  = transform_unit_interval(θ[1], 1e-04, 0.9999)
+        b  = transform_unit_interval(θ[2], 1e-04, 0.9999)
         ℓ₋₁ = θ[3]
         s₋₁ = θ[4]
         e = abs2(y[1] - ℓ₋₁ - s₋₁)
@@ -222,8 +220,8 @@ function recursion!(m::Holt)
 end
 
 function startx!(m::Holt)
-    m.parms[1] = transform_from_unit_interval(.5, 1e-04, 0.99)
-    m.parms[2] = transform_from_unit_interval(.5, 1e-04, 0.99)
+    m.parms[1] = transform_from_unit_interval(.5, 1e-04, 0.9999)
+    m.parms[2] = transform_from_unit_interval(.5, 1e-04, 0.9999)
     b0, b1 = trendcoef(m.values)
     m.parms[3] = b0
     m.parms[4] = b1
@@ -232,7 +230,7 @@ end
 function var_prediction(m::Holt, h)
     σ² = m.sigma.x
     a, b, l₀, s₀ = m.parms
-    (σ²*(1 + (j-1)*(a^2 + a*b*j + 1/6*b^2*j*(2*j -1))) for j in 1:h)
+    (σ²*(1 + (j-1)*(a^2 + a*b*j + (1/6)*(b^2)*j*(2*j -1))) for j in 1:h)
 end
 
 function mean_forecast(m::Holt, h)
@@ -283,13 +281,11 @@ function Forecast(m::T; h = 12, level = [.95]) where T<:AbstractExponentitalSmoo
     Forecast(m, meanf, margin, v, level)
 end
 
-
-
 function foes(y::T) where T<:AbstractVector
     m = FOES(y)
     obj = objective(m)
     res = optimize(θ -> obj(m.values, θ), m.parms, BFGS(), autodiff = :forward)
-    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.99)
+    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.9999)
     m.parms[2] = Optim.minimizer(res)[2]
     recursion!(m)
     m.sigma.x = var(m.residuals)
@@ -300,7 +296,7 @@ function foes(y::T) where T<:AbstractTimeSeries
     m = FOES(y)
     obj = objective(m)
     res = optimize(θ -> obj(m.values, θ), m.parms, BFGS(), autodiff = :forward)
-    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.99)
+    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.9999)
     m.parms[2] = Optim.minimizer(res)[2]
     recursion!(m)
     m.sigma.x = var(m.residuals)
@@ -312,8 +308,8 @@ function holt(y::T) where T<:AbstractVector
     obj = objective(m)
     #res = optimize(θ -> obj(m.values, θ), m.parms, BFGS(), autodiff = :forward)
     res = optimize(θ -> obj(m.values, θ), m.parms, NelderMead())
-    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.99)
-    m.parms[2] = transform_unit_interval(Optim.minimizer(res)[2], 1e-04, 0.99)
+    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.9999)
+    m.parms[2] = transform_unit_interval(Optim.minimizer(res)[2], 1e-04, 0.9999)
     m.parms[3] = Optim.minimizer(res)[3]
     m.parms[4] = Optim.minimizer(res)[4]
     recursion!(m)
@@ -325,8 +321,8 @@ function holt(y::T) where T<:AbstractTimeSeries
     m = Holt(y)
     obj = objective(m)
     res = optimize(θ -> obj(m.values, θ), m.parms, BFGS(), autodiff = :forward)
-    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.99)
-    m.parms[2] = transform_unit_interval(Optim.minimizer(res)[2], 1e-04, 0.99)
+    m.parms[1] = transform_unit_interval(Optim.minimizer(res)[1], 1e-04, 0.9999)
+    m.parms[2] = transform_unit_interval(Optim.minimizer(res)[2], 1e-04, 0.9999)
     m.parms[3] = Optim.minimizer(res)[3]
     m.parms[4] = Optim.minimizer(res)[4]
     recursion!(m)
@@ -337,9 +333,8 @@ end
 
 
 
-@recipe function fanchart(f::T; linecolor = RGB(29/255, 41/255, 81/255), forecast_linecolor = RGB(0, 49/255, 82/255), label = "") where T<:Forecast
+@recipe function fanchart(f::T; forecast_linecolor = :white, colorscheme = ColorSchemes.Blues_3, label = "") where T<:Forecast
     seriestype  --> :path
-    linecolor   --> linecolor
     insmpl = f.method.index
     outsmpl = next(f.method.index, length(f.mean))
     full_idx = [f.method.index; next(f.method.index, length(f.mean))]
@@ -347,43 +342,39 @@ end
     c2 = colorant"#71c7ec"
     col_margin = range(c1, stop=c2, length=length(f.margin))
     @series begin
+        linecolor --> :red
         seriestype := :path
         insmpl, f.method.values
     end
+
+    for (i, mar) in enumerate(Iterators.reverse(f.margin))
+        @series begin
+            linecolor := get(colorscheme, maximum(f.level))
+            fillcolor := get(colorscheme, f.level[i])
+            ribbon := (mar, mar)
+            outsmpl, f.mean
+        end
+    end
+
+    x = length(insmpl) + 1; y = 1
+    h = Inf; w = length(full_idx) - x
+    @series begin
+        seriestype := :shape
+        fillcolor --> :lightgray
+        fillalpha := 0.4
+        linewidth := 0.0
+        x .+ [0, w, w, 0], y .+ [-Inf, -Inf, h, h]
+    end
+
+    ## Plot the anchor
     @series begin
         seriestype := :path
-        linecolor := forecast_linecolor
-        outsmpl, f.mean
+        linecolor --> :red
+        linestyle := :dot
+        [last(insmpl); first(outsmpl)], [last(f.method.values); first(f.mean)]
     end
-    mar0 = f.mean
-    for (i, mar) in enumerate(f.margin)
-        mar0 = i == 1 ? f.mean : mar0
-        @series begin
-            seriestype := :path
-            fillalpha := .6
-            fillrange := f.mean .+ mar
-            fillcolor := col_margin[i]
-            linecolor := col_margin[i]
-            linealpha := 0.2
-            outsmpl, mar0
-        end
-        mar0 = f.mean .+ mar
-    end
-    mar0 = f.mean
-    for (i, mar) in enumerate(f.margin)
-        mar0 = i == 1 ? f.mean : mar0
 
-        @series begin
-            seriestype := :path
-            fillalpha := .6
-            fillrange := f.mean .- mar
-            fillcolor := col_margin[i]
-            linecolor := :white
-            linealpha := 0.2
-            linewidth := 0.
-            outsmpl, mar0
-        end
-        mar0 = f.mean .- mar
-    end
+    ## Plot 
+
 end
 
